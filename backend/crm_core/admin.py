@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Company, Contact, Lead, Deal, Activity
+from .models import Company, Contact, Lead, Deal, Activity, Membership, Subscription
 
 @admin.register(Company)
 class CompanyAdmin(admin.ModelAdmin):
@@ -8,6 +8,16 @@ class CompanyAdmin(admin.ModelAdmin):
 @admin.register(Contact)
 class ContactAdmin(admin.ModelAdmin):
     list_display = ("name", "email", "company")
+
+@admin.register(Membership)
+class MembershipAdmin(admin.ModelAdmin):
+    list_display = ("user", "company", "role", "is_active", "created_at")
+    list_filter = ("role", "is_active")
+
+@admin.register(Subscription)
+class SubscriptionAdmin(admin.ModelAdmin):
+    list_display = ("company", "plan", "status", "start_date", "end_date")
+    list_filter = ("plan", "status")
 
 @admin.register(Lead)
 class LeadAdmin(admin.ModelAdmin):

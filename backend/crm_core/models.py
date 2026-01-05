@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 
 User = get_user_model()
 
@@ -7,6 +8,9 @@ class Company(models.Model):
     name = models.CharField(max_length=255)
     website = models.URLField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["name"]
 
     def __str__(self):
         return self.name
@@ -19,6 +23,54 @@ class Contact(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.company.name})"
+
+class Membership(models.Model):
+    ROLE_ADMIN = 'admin'
+    ROLE_MANAGER = 'manager'
+    ROLE_AGENT = 'agent'
+    ROLE_CHOICES = [
+        (ROLE_ADMIN, 'Admin'),
+        (ROLE_MANAGER, 'Manager'),
+        (ROLE_AGENT, 'Agent'),
+    ]
+
+    user = models.ForeignKey(User, related_name='memberships', on_delete=models.CASCADE)
+    company = models.ForeignKey(Company, related_name='memberships', on_delete=models.CASCADE)
+    role = models.CharField(max_length=32, choices=ROLE_CHOICES, default=ROLE_AGENT)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = (('user', 'company'),)
+        ordering = ['company', 'user']
+
+    def __str__(self):
+        return f"{self.user.username} @ {self.company.name} ({self.role})"
+
+class Subscription(models.Model):
+    STATUS_ACTIVE = 'active'
+    STATUS_PAST_DUE = 'past_due'
+    STATUS_CANCELED = 'canceled'
+    STATUS_TRIALING = 'trialing'
+    STATUS_CHOICES = [
+        (STATUS_ACTIVE, 'Active'),
+        (STATUS_PAST_DUE, 'Past Due'),
+        (STATUS_CANCELED, 'Canceled'),
+        (STATUS_TRIALING, 'Trialing'),
+    ]
+
+    company = models.OneToOneField(Company, related_name='subscription', on_delete=models.CASCADE)
+    plan = models.CharField(max_length=64, default='free')
+    stripe_subscription_id = models.CharField(max_length=128, blank=True)
+    status = models.CharField(max_length=32, choices=STATUS_CHOICES, default=STATUS_TRIALING)
+    start_date = models.DateTimeField(default=timezone.now)
+    end_date = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-start_date']
+
+    def __str__(self):
+        return f"{self.company.name} - {self.plan} ({self.status})"
 
 class Lead(models.Model):
     STATUS_NEW = "new"
@@ -37,14 +89,18 @@ class Lead(models.Model):
     company = models.ForeignKey(Company, related_name="leads", on_delete=models.CASCADE)
     contact = models.ForeignKey(Contact, related_name="leads", on_delete=models.SET_NULL, null=True, blank=True)
     title = models.CharField(max_length=255, blank=True)
+    source = models.CharField(max_length=128, blank=True)
     value = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     probability = models.FloatField(null=True, blank=True)
     status = models.CharField(max_length=32, choices=STATUS_CHOICES, default=STATUS_NEW)
     created_at = models.DateTimeField(auto_now_add=True)
     owner = models.ForeignKey(User, related_name="leads", on_delete=models.SET_NULL, null=True, blank=True)
 
+    class Meta:
+        ordering = ['-created_at']
+
     def __str__(self):
-        return f"Lead {self.title} ({self.company.name})"
+        return f"Lead {self.title or self.id} ({self.company.name})"
 
 class Deal(models.Model):
     lead = models.ForeignKey(Lead, related_name="deals", on_delete=models.CASCADE)
@@ -53,6 +109,9 @@ class Deal(models.Model):
     stage = models.CharField(max_length=255, default="Proposal")
     probability = models.FloatField(default=0.0)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
 
     def __str__(self):
         return f"Deal {self.name} - {self.lead.company.name}"
@@ -73,6 +132,9 @@ class Activity(models.Model):
     notes = models.TextField(blank=True)
     occurred_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
 
     def __str__(self):
         return f"Activity {self.activity_type} for {self.lead}"
